@@ -1,33 +1,35 @@
 import arxiv
-import json
+import logging
 from datetime import datetime
+from typing import List
 
-def arxiv_abstracts_sample(num_results=10, query="LLM"):
+
+def fetch_arxiv_abstracts(num_results: int = 10, query: str = "LLM") -> List[str]:
     """
-    Sample code to fetch and print abstracts from ArXiv using the arxiv library.
+    Fetches abstracts from ArXiv using the arxiv library.
+    Returns a list of formatted paper entries.
     """
-    
-    # Initialize the ArXiv client and perform the search
     client = arxiv.Client()
     search = arxiv.Search(
         query=query,
         max_results=num_results,
         sort_by=arxiv.SortCriterion.SubmittedDate,
-        sort_order=arxiv.SortOrder.Descending # newest first
+        sort_order=arxiv.SortOrder.Descending
     )
-    
-    all_results = list(client.results(search))
-    if not all_results:
-        print("No results found.")
-        return
+    try:
+        all_results = list(client.results(search))
+    except Exception as e:
+        logging.error(f"Error fetching results from arXiv: {e}")
+        return []
 
-    print(f"✅ Found and retrieved {len(all_results)} paper(s).")
-    
+    if not all_results:
+        logging.warning("No results found.")
+        return []
+
+    logging.info(f"Found and retrieved {len(all_results)} paper(s).")
     output_lines = []
     for i, paper in enumerate(all_results):
-        # Take the paper main attributes
         abstract_clean = paper.summary.replace('\n', ' ')
-
         entry = (
             f"Paper {i+1}/{len(all_results)}:\n"
             f"Title: {paper.title}\n"
@@ -37,21 +39,32 @@ def arxiv_abstracts_sample(num_results=10, query="LLM"):
             f"Abstract:\n{abstract_clean}\n"
             "--------------------------------------------------\n"
         )
-        
         output_lines.append(entry)
-        
-        # Print a concise version to the console
-        print(f"{i+1}. **{paper.title}**")
-        print(f"   Published: {paper.published.strftime('%Y-%m-%d')}")
-        print(f"   Abstract: {abstract_clean[:200]}... [Full abstract saved to file]\n")
-    
-    filename = "arxiv_abstracts.txt"
+        # Log a concise version
+        logging.info(f"{i+1}. {paper.title} | Published: {paper.published.strftime('%Y-%m-%d')}")
+    return output_lines
+
+
+def save_abstracts_to_file(entries: List[str], filename: str = "arxiv_abstracts.txt") -> None:
+    """
+    Saves the list of paper entries to a file.
+    """
     try:
         with open(filename, 'w', encoding='utf-8') as f:
-            f.writelines(output_lines)
-        print(f"💾 Successfully stored all data in **{filename}**")
+            f.writelines(entries)
+        logging.info(f"Successfully stored all data in {filename}")
     except IOError as e:
-        print(f"❌ Error writing to file: {e}")
-    
+        logging.error(f"Error writing to file: {e}")
+
+
+def main(num_results: int = 10, query: str = "RAG AND LLM", filename: str = "arxiv_abstracts.txt") -> None:
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    entries = fetch_arxiv_abstracts(num_results=num_results, query=query)
+    if entries:
+        save_abstracts_to_file(entries, filename)
+    else:
+        logging.warning("No abstracts to save.")
+
+
 if __name__ == "__main__":
-    arxiv_abstracts_sample(num_results=10, query="RAG AND LLM")
+    main(num_results=10, query="RAG AND LLM")
