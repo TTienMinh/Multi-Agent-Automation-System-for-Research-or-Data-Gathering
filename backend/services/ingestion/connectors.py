@@ -1,18 +1,27 @@
 import os
+import time
 import arxiv
+import dotenv
 import logging
 from typing import List
 from pathlib import Path
 from datetime import datetime
 from theguardian import theguardian_content, theguardian_section
 
+dotenv.load_dotenv()
+
 project_root = Path(__file__).parent.parent.parent.parent
-print(f"Project root directory: {project_root}")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def fetch_arxiv_abstracts(num_results: int = 10, query: str = "LLM") -> List[str]:
     """
-    Fetches abstracts from ArXiv using the arxiv library.
-    Returns a list of formatted paper entries.
+    Fetch abstracts from ArXiv using the arxiv library.
+
+    Args:
+        num_results (int): Number of results to fetch.
+        query (str): Search query for ArXiv.
+    Returns:
+        List[str]: List of formatted paper entries.
     """
     client = arxiv.Client()
     search = arxiv.Search(
@@ -50,9 +59,13 @@ def fetch_arxiv_abstracts(num_results: int = 10, query: str = "LLM") -> List[str
     return output_lines
 
 
-def save_abstracts_to_file(entries: List[str], filename: str = "arxiv_abstracts.txt") -> None:
+def save_entries_to_file(entries: List[str], filename: str) -> None:
     """
-    Saves the list of paper entries to a file.
+    Save a list of entries to a file in the data directory.
+
+    Args:
+        entries (List[str]): List of string entries to save.
+        filename (str): Name of the file to save entries to.
     """
     full_path = project_root / "data" / filename
     try:
@@ -63,19 +76,40 @@ def save_abstracts_to_file(entries: List[str], filename: str = "arxiv_abstracts.
         logging.error(f"Error writing to file: {e}")
         
 
-def fetch_theguardian_sections() -> None:
+def fetch_theguardian_sections(
+    api_key: str,
+    query: str = "AI OR artificial intelligence",
+    tag: str = "technology/technology",
+    from_date: str = "2025-05-01",
+    order_by: str = "relevance"
+) -> List[str]:
     """
-    Fetches and prints sections from The Guardian via API.
+    Fetch sections from The Guardian via API.
+
+    Args:
+        api_key (str): The Guardian API key.
+        query (str): Search query.
+        tag (str): Tag to filter content.
+        from_date (str): Start date for articles (YYYY-MM-DD). Defaults to today if None.
+        order_by (str): Order of results.
+    Returns:
+        List[str]: List of formatted section entries.
     """
+    if from_date is None:
+        from_date = datetime.now().strftime('%Y-%m-%d')
     headers = {
-        "q": "AI OR artificial intelligence",
-        "tag": "technology/technology",
-        "from-date": "2025-05-01",
-        "order-by": "relevance",
+        "q": query,
+        "tag": tag,
+        "from-date": from_date,
+        "order-by": order_by,
     }
-    content = theguardian_content.Content(api="test", **headers)
-    res = content.get_content_response()
-    result = content.get_results(res)
+    try:
+        content = theguardian_content.Content(api=api_key, **headers)
+        res = content.get_content_response()
+        result = content.get_results(res)
+    except Exception as e:
+        logging.error(f"Error fetching results from The Guardian: {e}")
+        return []
 
     output_lines = []
     for i, section in enumerate(result):
@@ -89,24 +123,25 @@ def fetch_theguardian_sections() -> None:
             "--------------------------------------------------\n"
         )
         output_lines.append(entry)
-
-    for line in output_lines:
-        print(line)
-        print("--------------------------------------------------")
-        
+        logging.info(f"{i+1}. {section.get('webTitle', 'N/A')} | Section: {section.get('sectionName', 'N/A')}")
     return output_lines
 
+
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    entries = fetch_arxiv_abstracts(num_results=10, query="RAG AND LLM")
-    if entries:
-        save_abstracts_to_file(entries, filename="arxiv_abstracts.txt")
+    """
+    Main execution for fetching and saving ArXiv abstracts and The Guardian sections.
+    API keys should be set via environment variables for security.
+    """
+    arxiv_entries = fetch_arxiv_abstracts(num_results=10, query="RAG AND LLM")
+    if arxiv_entries:
+        save_entries_to_file(arxiv_entries, filename="arxiv_abstracts.txt")
     else:
         logging.warning("No abstracts to save.")
-        
-    entries = fetch_theguardian_sections()
-    if entries:
-        save_abstracts_to_file(entries, filename="theguardian_sections.txt")
+
+    api_key = os.environ.get("GUARDIAN_API_KEY")
+    guardian_entries = fetch_theguardian_sections(api_key=api_key)
+    if guardian_entries:
+        save_entries_to_file(guardian_entries, filename="theguardian_sections.txt")
     else:
         logging.warning("No sections to save.")
 
