@@ -4,7 +4,7 @@ import dotenv
 
 dotenv.load_dotenv()
 
-class Database:
+class RawItems:
     def __init__(self):
         self.connection = None
         self.connect()
@@ -71,20 +71,4 @@ class Database:
 
 
 if __name__ == "__main__":
-    db = Database()
-    db.create_tables("""
-        CREATE TABLE IF NOT EXISTS raw_items (
-            id SERIAL PRIMARY KEY,
-            source VARCHAR(50) NOT NULL,
-            source_id VARCHAR(100) NOT NULL,
-            fetched_at TIMESTAMP NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            authors TEXT,
-            published_at TIMESTAMP,
-            summary TEXT,
-            full_text TEXT,
-            url VARCHAR(255) NOT NULL,
-            processed BOOLEAN DEFAULT FALSE
-        );
-    """)  
-    db.close()
+    db = RawItems()
