@@ -6,21 +6,22 @@ import logging
 from typing import List
 from pathlib import Path
 from datetime import datetime
+from pymed_paperscraper import PubMed
 from theguardian import theguardian_content, theguardian_section
-
-dotenv.load_dotenv()
 
 project_root = Path(__file__).parent.parent.parent.parent
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class ArxivFetcher:
     """
-    Class to fetch abstracts from ArXiv and save them to file.
+    Class to fetch articles from ArXiv and save them to file.
     """
-    @staticmethod
-    def fetch_abstracts_metadata(num_results: int = 10, query: str = "LLM") -> List[dict]:
+    def __init__(self):
+        self.client = arxiv.Client()
+
+    def fetch_articles_metadata(self, num_results: int = 10, query: str = "LLM") -> List[dict]:
         """
-        Fetch abstracts from ArXiv and return a list of metadata dicts.
+        Fetch articles from ArXiv and return a list of metadata dicts.
 
         Args:
             num_results (int): Number of results to fetch.
@@ -28,7 +29,6 @@ class ArxivFetcher:
         Returns:
             List[dict]: List of metadata dicts for each paper.
         """
-        client = arxiv.Client()
         search = arxiv.Search(
             query=query,
             max_results=num_results,
@@ -36,7 +36,7 @@ class ArxivFetcher:
             sort_order=arxiv.SortOrder.Descending
         )
         try:
-            all_results = list(client.results(search))
+            all_results = list(self.client.results(search))
         except Exception as e:
             logging.error(f"Error fetching results from arXiv: {e}")
             return []
@@ -45,23 +45,23 @@ class ArxivFetcher:
             logging.warning("No results found.")
             return []
 
-        fetched_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         metadata_list = []
         for paper in all_results:
             metadata = {
+                "source": "arxiv",
                 "title": paper.title,
+                "url": paper.entry_id,
+                "id": paper.entry_id.split('/')[-1],
                 "authors": [a.name for a in paper.authors],
-                "entry_id": paper.entry_id.split('/')[-1],
-                "published": paper.published.strftime('%Y-%m-%d'),
-                "fetched_time": fetched_time,
-                "pdf_url": paper.pdf_url,
                 "abstract": paper.summary.replace('\n', ' '),
+                "publication_date": paper.published.strftime('%Y-%m-%d'),
+                "fetched_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
             metadata_list.append(metadata)
         return metadata_list
 
-    @staticmethod
-    def save_metadata_to_file(metadata_list: List[dict], filename: str) -> None:
+    
+    def save_metadata_to_file(self, metadata_list: List[dict], filename: str) -> None:
         """
         Save a list of metadata dicts to a file as formatted text.
 
@@ -90,13 +90,65 @@ class ArxivFetcher:
             logging.error(f"Error writing to file: {e}")
 
 
+class PubMedFetcher:
+    """
+    Class to fetch articles from PubMed.
+    """
+    def __init__(self):
+        self.client = PubMed()
+        
+    def fetch_articles_metadata(self, query: str = "AI", max_results: int = 10) -> List[dict]:
+        search = list(self.client.query(query, max_results=max_results))
+        metadata_list = []
+        for article in search:
+            authors = []
+            for author in getattr(article, "authors", []):
+                authors.append(" ".join([author.get('firstname', ''), author.get('lastname', '')]).strip())
+            metadata = {
+                "source": "pubmed",
+                "title": getattr(article, "title", ""),
+                "authors": authors,
+                "abstract": getattr(article, "abstract", ""),
+                "id": getattr(article, "pubmed_id", ""),
+                "publication_date": getattr(article, "publication_date", ""),
+                "fetched_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "url": "https://doi.org/" + getattr(article, "doi", "") if getattr(article, "doi", "") else "",
+            }
+            metadata_list.append(metadata)
+        return metadata_list
+    
+    
+    def save_metadata_to_file(self, metadata_list: List[dict], filename: str) -> None:
+        full_path = project_root / "data" / filename
+        try:
+            with open(full_path, 'w', encoding='utf-8') as f:
+                for i, meta in enumerate(metadata_list):
+                    entry = (
+                        f"Article {i+1}/{len(metadata_list)}:\n"
+                        f"Title: {meta.get('title', '')}\n"
+                        f"Authors: {', '.join(meta.get('authors', []))}\n"
+                        f"PubMed ID: {meta.get('pubmed_id', '')}\n"
+                        f"Publication Date: {meta.get('publication_date', '')}\n"
+                        f"Fetched Time: {meta.get('fetched_time', '')}\n"
+                        f"URL: {meta.get('url', '')}\n"
+                        f"Abstract:\n{meta.get('abstract', '')}\n"
+                        "--------------------------------------------------\n"
+                    )
+                    f.write(entry)
+            logging.info(f"Successfully stored all data in {full_path}")
+        except IOError as e:
+            logging.error(f"Error writing to file: {e}")
+
+
 class GuardianFetcher:
     """
     Class to fetch sections from The Guardian and save them to file.
     """
-    @staticmethod
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+    
     def fetch_sections_metadata(
-        api_key: str,
+        self,
         query: str = "AI OR artificial intelligence",
         tag: str = "technology/technology",
         from_date: str = "2025-05-01",
@@ -123,30 +175,30 @@ class GuardianFetcher:
             "order-by": order_by,
         }
         try:
-            content = theguardian_content.Content(api=api_key, **headers)
+            content = theguardian_content.Content(api=self.api_key, **headers)
             res = content.get_content_response()
             result = content.get_results(res)
         except Exception as e:
             logging.error(f"Error fetching results from The Guardian: {e}")
             return []
 
-        fetched_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         metadata_list = []
         for section in result:
             metadata = {
+                "source": "theguardian",
                 "id": section.get('id', 'N/A'),
                 "sectionId": section.get('sectionId', 'N/A'),
                 "sectionName": section.get('sectionName', 'N/A'),
                 "webPublicationDate": section.get('webPublicationDate', 'N/A'),
                 "webTitle": section.get('webTitle', 'N/A'),
                 "webUrl": section.get('webUrl', 'N/A'),
-                "fetched_time": fetched_time,
+                "fetched_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
             metadata_list.append(metadata)
         return metadata_list
 
-    @staticmethod
-    def save_metadata_to_file(metadata_list: List[dict], filename: str) -> None:
+    
+    def save_metadata_to_file(self, metadata_list: List[dict], filename: str) -> None:
         """
         Save a list of metadata dicts to a file as formatted text.
 
