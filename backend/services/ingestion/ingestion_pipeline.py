@@ -27,11 +27,11 @@ def run_arxiv_ingestion(keywords: List[str], db_conn) -> None:
         for article in distinct_articles:
             cleaned_abstract = clean_html(article['abstract'])
 
-            query = """
+            insert_metadata_query = """
                 INSERT INTO raw_items (source, source_id, fetched_at, title, authors, published_at, summary, full_text, url, processed)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            params = (
+            metadata_params = (
                 article.get('source', ''),
                 article.get('id', ''),
                 article.get('fetched_time', ''),
@@ -43,7 +43,22 @@ def run_arxiv_ingestion(keywords: List[str], db_conn) -> None:
                 article.get('url', ''),
                 False
             )
-            raw_items_model.execute_non_query(query, params)
+            raw_items_model.execute_non_query(insert_metadata_query, metadata_params)
+            
+            chunked_abstracts = chunk_text(cleaned_abstract, chunk_size=500, overlap=100)
+            
+            insert_chunks_query = """
+                INSERT INTO chunks (document_id, chunk_index, text, vector_id)
+                VALUES (%s, %s, %s, %s)
+            """
+            for idx, chunk in enumerate(chunked_abstracts):
+                chunk_params = (
+                    article.get('id', ''),
+                    idx,
+                    chunk,
+                    None
+                )
+                raw_items_model.execute_non_query(insert_chunks_query, chunk_params)
 
     raw_items_model.close()
     

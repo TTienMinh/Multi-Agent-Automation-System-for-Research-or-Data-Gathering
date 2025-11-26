@@ -1,6 +1,7 @@
 import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownTextSplitter
 
+
 def clean_html(html_text: str) -> str:
     """
     Clean HTML tags from the given text.
@@ -11,8 +12,6 @@ def clean_html(html_text: str) -> str:
     Returns: 
         str: Cleaned text without HTML tags.
     """
-    if html_text is None:
-        return ''
     cleanr = re.compile('<.*?>')
     cleantext = re.sub(cleanr, '', html_text)
     return cleantext
