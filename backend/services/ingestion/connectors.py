@@ -49,13 +49,13 @@ class ArxivFetcher:
         for paper in all_results:
             metadata = {
                 "source": "arxiv",
-                "title": paper.title,
-                "url": paper.entry_id,
                 "id": paper.entry_id.split('/')[-1],
-                "authors": [a.name for a in paper.authors],
-                "abstract": paper.summary.replace('\n', ' '),
-                "publication_date": paper.published.strftime('%Y-%m-%d'),
                 "fetched_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "title": paper.title,
+                "authors": ','.join([a.name for a in paper.authors]),
+                "publication_date": paper.published.strftime('%Y-%m-%d'),
+                "abstract": paper.summary.replace('\n', ' '),
+                "url": paper.entry_id,
             }
             metadata_list.append(metadata)
         return metadata_list

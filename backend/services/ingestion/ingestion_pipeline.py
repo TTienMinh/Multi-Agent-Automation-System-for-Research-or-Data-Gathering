@@ -17,48 +17,60 @@ def run_arxiv_ingestion(keywords: List[str], db_conn) -> None:
     arxiv_fetcher = ArxivFetcher()
     pubmed_fetcher = PubMedFetcher()
     raw_items_model = RawItems()
-
+    
     for keyword in keywords:
         all_articles = arxiv_fetcher.fetch_articles_metadata(num_results=5, query=keyword) + \
                         pubmed_fetcher.fetch_articles_metadata(max_results=5, query=keyword)
         # Use 'title' as the unique field for filtering
         distinct_articles = filter_distinct_items(db_conn, "raw_items", "title", all_articles)
 
+        # Insert distinct articles into the database
+        metadata_params_list = []
         for article in distinct_articles:
             cleaned_abstract = clean_html(article['abstract'])
 
             insert_metadata_query = """
-                INSERT INTO raw_items (source, source_id, fetched_at, title, authors, published_at, summary, full_text, url, processed)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO raw_items 
+                (source, source_id, fetched_at, title, authors, published_at, summary, full_text, url, processed)
+                VALUES %s
+                RETURNING id
             """
-            metadata_params = (
+            metadata_params_list.append((
                 article.get('source', ''),
                 article.get('id', ''),
                 article.get('fetched_time', ''),
                 article.get('title', ''),
-                ', '.join(article.get('authors', [])),
+                article.get('authors', ''),
                 article.get('publication_date', None),
                 cleaned_abstract,
-                None,
+                None,   # full_text
                 article.get('url', ''),
-                False
-            )
-            raw_items_model.execute_non_query(insert_metadata_query, metadata_params)
+                False   # processed
+            ))
+            articles_ids = raw_items_model.execute_bulk_insert(insert_metadata_query, metadata_params_list)
             
-            chunked_abstracts = chunk_text(cleaned_abstract, chunk_size=500, overlap=100)
+            print(f"Inserted {len(articles_ids)} articles. Generating chunks...")
+            
+            # Generate and insert chunks for each article
+            chunks_params_list = []
+            for article, article_id in zip(distinct_articles, articles_ids):
+                chunked_abstracts = chunk_text(cleaned_abstract, chunk_size=500, overlap=100)
+                
+                for idx, chunk in enumerate(chunked_abstracts):
+                    chunks_params_list.append((
+                        article_id,     # foreign key to raw_items.id
+                        idx,            # chunk index
+                        chunk,          # chunk text
+                        None            # vector_id
+                    ))
             
             insert_chunks_query = """
                 INSERT INTO chunks (document_id, chunk_index, text, vector_id)
-                VALUES (%s, %s, %s, %s)
+                VALUES %s
             """
-            for idx, chunk in enumerate(chunked_abstracts):
-                chunk_params = (
-                    article.get('id', ''),
-                    idx,
-                    chunk,
-                    None
-                )
-                raw_items_model.execute_non_query(insert_chunks_query, chunk_params)
+
+            raw_items_model.execute_bulk_insert(insert_chunks_query, chunks_params_list)
+            print(f"Inserted {len(chunks_params_list)} chunks successfully.")
 
     raw_items_model.close()
     

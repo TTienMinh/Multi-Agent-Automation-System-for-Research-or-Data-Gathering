@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.extras
 import os
 import dotenv
 
@@ -8,6 +9,8 @@ class RawItems:
     def __init__(self):
         self.connection = None
         self.connect()
+        if self.connection:
+            self.connection.autocommit = True
 
     def connect(self):
         """
@@ -34,6 +37,31 @@ class RawItems:
             self.connection.close()
             print("Database connection closed.")
             self.connection = None
+            
+    def execute_bulk_insert(self, query: str, data_list: list):
+        """
+        Execute a bulk insert operation.
+        """
+        if not self.connection:
+            print("No database connection.")
+            return []
+        
+        try:
+            cursor = self.connection.cursor()
+
+            ids = psycopg2.extras.execute_values(
+                cursor, query, data_list, fetch=True
+            )
+            
+            self.connection.commit()
+            cursor.close()
+            
+            return [id_tuple[0] for id_tuple in ids]
+        
+        except psycopg2.Error as e:
+            print(f"Error executing bulk insert: {e}")
+            self.connection.rollback()
+            return []
 
     def execute_query(self, query: str, params=None):
         """
