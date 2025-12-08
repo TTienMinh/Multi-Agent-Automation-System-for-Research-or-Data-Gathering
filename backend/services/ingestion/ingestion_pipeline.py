@@ -1,9 +1,12 @@
 import datetime
-from models import RawItems
 from typing import List, Dict, Any
-from utils import filter_distinct_items
-from preprocessor import chunk_text, clean_html
-from connectors import ArxivFetcher, PubMedFetcher, GuardianFetcher
+
+from backend.services.ingestion.models import RawItems
+from backend.services.ingestion.utils import filter_distinct_items
+from backend.services.ingestion.preprocessor import chunk_text, clean_html
+from backend.services.ingestion.connectors import ArxivFetcher, PubMedFetcher, GuardianFetcher
+
+from backend.services.embedding.models import FaissVectorStore, TextEmbedEmbeddingsClient
 
 
 def run_arxiv_ingestion(keywords: List[str], db_conn) -> None:
@@ -50,6 +53,10 @@ def run_arxiv_ingestion(keywords: List[str], db_conn) -> None:
             articles_ids = raw_items_model.execute_bulk_insert(insert_metadata_query, metadata_params_list)
             
             print(f"Inserted {len(articles_ids)} articles. Generating chunks...")
+            
+            # Vector store and embeddings client initialization
+            vector_store = FaissVectorStore()
+            embeddings_client = TextEmbedEmbeddingsClient()
             
             # Generate and insert chunks for each article
             chunks_params_list = []
