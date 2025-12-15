@@ -107,7 +107,7 @@ class PubMedFetcher:
             metadata = {
                 "source": "pubmed",
                 "title": getattr(article, "title", ""),
-                "authors": authors,
+                "authors": ", ".join(authors),
                 "abstract": getattr(article, "abstract", ""),
                 "id": getattr(article, "pubmed_id", ""),
                 "publication_date": getattr(article, "publication_date", ""),
@@ -126,7 +126,7 @@ class PubMedFetcher:
                     entry = (
                         f"Article {i+1}/{len(metadata_list)}:\n"
                         f"Title: {meta.get('title', '')}\n"
-                        f"Authors: {', '.join(meta.get('authors', []))}\n"
+                        f"Authors: {meta.get('authors', '')}\n"
                         f"PubMed ID: {meta.get('pubmed_id', '')}\n"
                         f"Publication Date: {meta.get('publication_date', '')}\n"
                         f"Fetched Time: {meta.get('fetched_time', '')}\n"
@@ -238,7 +238,7 @@ def main() -> None:
     else:
         logging.warning("No abstracts to save.")
 
-    api_key = os.environ.get("GUARDIAN_API_KEY")
+    api_key = os.getenv("GUARDIAN_API_KEY")
     guardian_metadata = GuardianFetcher.fetch_sections_metadata(api_key=api_key)
     if guardian_metadata:
         GuardianFetcher.save_metadata_to_file(guardian_metadata, filename="theguardian_sections.txt")

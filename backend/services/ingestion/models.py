@@ -18,11 +18,11 @@ class RawItems:
         """
         try:
             self.connection = psycopg2.connect(
-                dbname=os.environ.get("DB_NAME"),
-                user=os.environ.get("DB_USER"),
-                password=os.environ.get("DB_PASSWORD"),
-                host=os.environ.get("DB_HOST"),
-                port=os.environ.get("DB_PORT")
+                dbname=os.getenv("DB_NAME"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                host=os.getenv("DB_HOST"),
+                port=os.getenv("DB_PORT")
             )
             print("Database connection established.")
         except psycopg2.Error as e:
