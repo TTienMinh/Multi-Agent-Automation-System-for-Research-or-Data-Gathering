@@ -98,7 +98,7 @@ def process_and_store_chunks(db_model, articles: List[Dict], article_ids: List[i
         if not abstract:
             continue
             
-        chunked_text = chunk_text(abstract, chunk_size=500, overlap=100)
+        chunked_text = chunk_text(abstract, chunk_size=1000, overlap=200)
 
         for idx, chunk in enumerate(chunked_text):
             if not chunk.strip():
@@ -115,6 +115,8 @@ def process_and_store_chunks(db_model, articles: List[Dict], article_ids: List[i
             except Exception as e:
                 logger.error(f"Failed to embed chunk {idx} for article ID {article_id}: {e}")
                 
+    vector_store.save_local("./faiss_index") # Save the updated vector store
+    
     if chunks_params_list:
         insert_chunks_query = """
             INSERT INTO chunks (document_id, chunk_index, text, vector_id)
@@ -193,3 +195,4 @@ if __name__ == "__main__":
         arxiv_num_results=2, 
         pubmed_num_results=2
     )
+    
